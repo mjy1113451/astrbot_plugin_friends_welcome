@@ -3,4 +3,4 @@ display_name:astrbot_plugin_friends_welcome # 用于展示的名字，可以方�
 desc: AstrBot 好友审批系统 # 插件简短描述
 version: v1.0.0 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: mjy1113451# 作者
-repo: https://github.com/mjy1113451/astrbot_plugin_friends_welcome.git # 插件的仓库地址
+repo: https://github.com/mjy1113451/astrbot_plugin_friends_welcome # 插件的仓库地址
