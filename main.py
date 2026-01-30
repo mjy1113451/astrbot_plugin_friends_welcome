@@ -30,7 +30,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Set, Any, Optional
 from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.star import Context, Star, register, StarTools
+from astrbot.api.star import Context, Star, StarTools
 from astrbot.api import logger
 
 class Action(Enum):
@@ -89,89 +89,92 @@ class FriendBotPlugin(Star):
 
     async def _get_or_create_user(self, uid: str, name: str) -> None:
         """Registers a new user or updates existing user name."""
-        if uid not in self.users:
-            self.users[uid] = {"name": name, "friends": set(), "inbox": {}}
-            await self.save_data()
-        else:
-            if self.users[uid]["name"] != name:
-                self.users[uid]["name"] = name
-                await self.save_data()
+        async with self.lock:
+            if uid not in self.users:
+                self.users[uid] = {"name": name, "friends": set(), "inbox": {}}
+            else:
+                if self.users[uid]["name"] != name:
+                    self.users[uid]["name"] = name
+        await self.save_data()
 
     async def send_request(self, from_id: str, to_id: str, msg: str = "") -> str:
         """Sends a friend request."""
-        if to_id == from_id:
-            return "❌ 不能加自己"
-        
-        if to_id not in self.users:
-            return f"❌ 用户 {to_id} 未注册（对方需至少使用过一次此Bot）"
+        async with self.lock:
+            if to_id == from_id:
+                return "❌ 不能加自己"
             
-        from_user = self.users[from_id]
-        to_user = self.users[to_id]
-        
-        if to_id in from_user["friends"]:
-            return f"⚠️ {to_user['name']} 已经是你的好友"
+            if to_id not in self.users:
+                return f"❌ 用户 {to_id} 未注册（对方需至少使用过一次此Bot）"
+                
+            from_user = self.users[from_id]
+            to_user = self.users[to_id]
             
-        if from_id in to_user["inbox"]:
-            return f"⚠️ 已发送过申请，请等待 {to_user['name']} 处理"
-             
-        req = {
-            "from": from_id,
-            "from_name": from_user["name"],
-            "to": to_id,
-            "msg": msg or "请求添加你为好友",
-            "time": datetime.now().strftime("%m-%d %H:%M")
-        }
-        
-        to_user["inbox"][from_id] = req
+            if to_id in from_user["friends"]:
+                return f"⚠️ {to_user['name']} 已经是你的好友"
+                
+            if from_id in to_user["inbox"]:
+                return f"⚠️ 已发送过申请，请等待 {to_user['name']} 处理"
+                 
+            req = {
+                "from": from_id,
+                "from_name": from_user["name"],
+                "to": to_id,
+                "msg": msg or "请求添加你为好友",
+                "time": datetime.now().strftime("%m-%d %H:%M")
+            }
+            
+            to_user["inbox"][from_id] = req
         await self.save_data()
         return f"✅ 已向 {to_user['name']}({to_id}) 发送好友申请"
 
     async def handle_request(self, uid: str, target_id: str, action: Action) -> str:
         """Handles a friend request (accept/reject)."""
-        if uid not in self.users:
-            return "❌ 你未注册"
+        async with self.lock:
+            if uid not in self.users:
+                return "❌ 你未注册"
+                
+            current_user = self.users[uid]
+            req = current_user["inbox"].get(target_id)
             
-        current_user = self.users[uid]
-        req = current_user["inbox"].get(target_id)
-        
-        if not req:
-            return "❌ 申请不存在或已处理"
+            if not req:
+                return "❌ 申请不存在或已处理"
+                
+            friend_id = target_id
+            if friend_id not in self.users:
+                return "❌ 申请人不存在"
+                 
+            friend_user = self.users[friend_id]
             
-        friend_id = target_id
-        if friend_id not in self.users:
-            return "❌ 申请人不存在"
-             
-        friend_user = self.users[friend_id]
-        
-        if action == Action.ACCEPT:
-            current_user["friends"].add(friend_id)
-            friend_user["friends"].add(uid)
-            if friend_id in current_user["inbox"]:
-                del current_user["inbox"][friend_id]
-            await self.save_data()
-            return f"✅ 你和 {friend_user['name']} 成为好友"
-            
-        elif action == Action.REJECT:
-            if friend_id in current_user["inbox"]:
-                del current_user["inbox"][friend_id]
-            await self.save_data()
-            return f"❌ 你拒绝了 {friend_user['name']} 的申请"
-            
-        return "❌ 无效操作"
+            if action == Action.ACCEPT:
+                current_user["friends"].add(friend_id)
+                friend_user["friends"].add(uid)
+                if friend_id in current_user["inbox"]:
+                    del current_user["inbox"][friend_id]
+                await self.save_data()
+                return f"✅ 你和 {friend_user['name']} 成为好友"
+                
+            elif action == Action.REJECT:
+                if friend_id in current_user["inbox"]:
+                    del current_user["inbox"][friend_id]
+                await self.save_data()
+                return f"❌ 你拒绝了 {friend_user['name']} 的申请"
+                
+            return "❌ 无效操作"
 
     async def remove_friend(self, uid: str, fid: str) -> str:
         """Removes a friend."""
-        if uid not in self.users:
-            return "❌ 你未注册"
-        
-        current_user = self.users[uid]
-        if fid not in current_user["friends"]:
-            return "❌ 对方不是好友"
+        async with self.lock:
+            if uid not in self.users:
+                return "❌ 你未注册"
             
-        current_user["friends"].remove(fid)
-        if fid in self.users:
-            self.users[fid]["friends"].discard(uid)
-            
+            current_user = self.users[uid]
+            if fid not in current_user["friends"]:
+                return "❌ 对方不是好友"
+                
+            current_user["friends"].remove(fid)
+            if fid in self.users:
+                self.users[fid]["friends"].discard(uid)
+                
         await self.save_data()
         friend_name = self.users[fid]['name'] if fid in self.users else fid
         return f"✅ 已解除与 {friend_name} 的好友关系"
@@ -213,10 +216,9 @@ class FriendBotPlugin(Star):
         args = text.split()
         
         # Remove command prefix
+        clean_args = args
         if args and args[0].lower() in ["/friend", "friend"]:
             clean_args = args[1:]
-        else:
-            clean_args = args
             
         if not clean_args:
             yield event.plain_result("请输入子指令: add, accept, reject, remove, list")
@@ -260,4 +262,4 @@ class FriendBotPlugin(Star):
         if len(args) < 2:
             return "❌ 用法: /friend remove <目标ID>"
         target_id = args[1]
-        return await self.remove_friend(user_id, target_id)
+        return await
