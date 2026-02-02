@@ -262,4 +262,4 @@ class FriendBotPlugin(Star):
         if len(args) < 2:
             return "❌ 用法: /friend remove <目标ID>"
         target_id = args[1]
-        return await
+        return await some_function()
