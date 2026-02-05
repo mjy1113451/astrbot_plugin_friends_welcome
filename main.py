@@ -296,7 +296,7 @@ class FriendBotPlugin(Star):
             return "用法: /friend reject <对方ID>"
         target_id = args[1]
         return await self.handle_request_user["name"],
-                "to": to_id,
+                "to":to_id,
                 "msg": msg or "请求添加您为好友",
                 "time": datetime.now().strftime("%m-%d %H:%M")
             }
