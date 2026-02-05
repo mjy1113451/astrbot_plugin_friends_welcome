@@ -23,7 +23,6 @@ class MyPlugin(Star):
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
 
-
 import asyncio
 import json
 import os
@@ -296,6 +295,161 @@ class FriendBotPlugin(Star):
         if len(args) < 2:
             return "用法: /friend reject <对方ID>"
         target_id = args[1]
+        return await self.handle_request_user["name"],
+                "to": to_id,
+                "msg": msg or "请求添加您为好友",
+                "time": datetime.now().strftime("%m-%d %H:%M")
+            }
+            
+            to_user["inbox"][from_id] = req
+        await self.save_data()
+        return f"✅ 已向 {to_user['name']}({to_id}) 发送好友申请"
+
+    async def handle_request(self, uid: str, target_id: str, action: Action) -> str:
+        """处理好友申请（同意/拒绝）"""
+        async with self.lock:
+            if uid not in self.users:
+                return "❌ 您还未注册"
+                
+            current_user = self.users[uid]
+            req = current_user["inbox"].get(target_id)
+            
+            if not req:
+                return "❌ 未找到该好友申请"
+                
+            friend_id = target_id
+            if friend_id not in self.users:
+                return "❌ 该用户已不存在"
+                 
+            friend_user = self.users[friend_id]
+            
+            if action == Action.ACCEPT:
+                current_user["friends"].add(friend_id)
+                friend_user["friends"].add(uid)
+                if friend_id in current_user["inbox"]:
+                    del current_user["inbox"][friend_id]
+                await self.save_data()
+                return f"✅ 已同意 {friend_user['name']} 的好友申请"
+                
+            elif action == Action.REJECT:
+                if friend_id in current_user["inbox"]:
+                    del current_user["inbox"][friend_id]
+                await self.save_data()
+                return f"❌ 已拒绝 {friend_user['name']} 的好友申请"
+                
+            return "❌ 无效的操作"
+
+    async def remove_friend(self, uid: str, fid: str) -> str:
+        """删除好友"""
+        async with self.lock:
+            if uid not in self.users:
+                return "❌ 您还未注册"
+            
+            current_user = self.users[uid]
+            if fid not in current_user["friends"]:
+                return "❌ 你们不是好友"
+                
+            current_user["friends"].remove(fid)
+            if fid in self.users:
+                self.users[fid]["friends"].discard(uid)
+                
+        await self.save_data()
+        friend_name = self.users[fid]['name'] if fid in self.users else fid
+        return f"✅ 已删除好友 {friend_name}"
+
+    def show_info(self, uid: str) -> str:
+        """显示用户信息"""
+        if uid not in self.users:
+            return "❌ 您还未注册"
+            
+        current_user = self.users[uid]
+        
+        # 好友列表
+        friends_list = []
+        for fid in current_user["friends"]:
+            name = self.users[fid]["name"] if fid in self.users else fid
+            friends_list.append(f"{name}({fid})")
+        
+        # 待处理申请
+        pending_list = []
+        inbox_count = len(current_user["inbox"])
+        for rid, req in current_user["inbox"].items():
+            pending_list.append(f"• {req['from_name']}({rid}): {req['msg']}")
+        
+        lines = [f"👤 {current_user['name']} 的信息:"]
+        lines.append(f"\n🤝 好友({len(friends_list)}): {', '.join(friends_list) if friends_list else '无'}")
+        
+        if inbox_count > 0:
+            lines.append(f"\n🔔 待处理申请({inbox_count}): \n" + "\n".join(pending_list))
+            lines.append(f"\n💡 提示: 使用 /friend accept <ID> 同意申请")
+        else:
+            lines.append(f"\n📭 待处理申请: 无")
+            
+        return "\n".join(lines)
+
+    async def initialize(self) -> None:
+        pass
+
+    async def terminate(self) -> None:
+        pass
+
+    @filter.command("friend")
+    async def friend(self, event: AstrMessageEvent):
+        '''好友系统命令
+        /friend add <id> [msg] - 添加好友
+        /friend accept <id> - 同意好友申请
+        /friend reject <id> - 拒绝好友申请
+        /friend remove <id> - 删除好友
+        /friend list - 查看好友列表和待处理申请
+        '''
+        user_id = event.get_sender_id()
+        user_name = event.get_sender_name()
+        await self._get_or_create_user(user_id, user_name)
+        
+        text = event.message_str.strip()
+        args = text.split()
+        
+        # 移除命令前缀
+        clean_args = args
+        if args and args[0].lower() in ["/friend", "friend"]:
+            clean_args = args[1:]
+            
+        if not clean_args:
+            yield event.plain_result("可用命令: add, accept, reject, remove, list")
+            return
+
+        cmd = clean_args[0].lower()
+        
+        if cmd == "add":
+            yield event.plain_result(await self._handle_add(user_id, clean_args))
+        elif cmd == "accept":
+            yield event.plain_result(await self._handle_accept(user_id, clean_args))
+        elif cmd == "reject":
+            yield event.plain_result(await self._handle_reject(user_id, clean_args))
+        elif cmd == "remove":
+            yield event.plain_result(await self._handle_remove(user_id, clean_args))
+        elif cmd == "list":
+            yield event.plain_result(self.show_info(user_id))
+        else:
+            yield event.plain_result(f"❌ 未知命令 '{cmd}'，可用: add, accept, reject, remove, list")
+
+    async def _handle_add(self, user_id: str, args: List[str]) -> str:
+        if len(args) < 2:
+            return "用法: /friend add <对方ID> [备注消息]"
+        target_id = args[1]
+        msg = " ".join(args[2:]) if len(args) > 2 else ""
+        return await self.send_request(user_id, target_id, msg)
+
+    async def _handle_accept(self, user_id: str, args: List[str]) -> str:
+        if len(args) < 2:
+            return "用法: /friend accept <对方ID>"
+        target_id = args[1]
+        return await self.handle_request(user_id, target_id, Action.ACCEPT)
+
+    async def _handle_reject(self, user_id: str, args: List[str]) -> str:
+        if len(args) < 2:
+            return "用法: /friend reject <对方ID>"
+        target_id = args[1]
         return await self.handle_request(user_id, target_id, Action.REJECT)
 
     async def _handle_remove(self, user_id: str, args: List[str]) -> str:
@@ -303,3 +457,5 @@ class FriendBotPlugin(Star):
             return "用法: /friend remove <对方ID>"
         target_id = args[1]
         return await self.remove_friend(user_id, target_id)
+
+        
