@@ -151,7 +151,7 @@ class FriendBotPlugin(Star):
         await self.save_data()
         return f"✅ 已向 {to_user['name']}({to_id}) 发送好友申请"
 
-    async def handle_request(self, uid: str, target_id: strstri, action: Action) -> str:
+    async def handle_request(self, uid: str, target_id: str, action: Action) -> str:
         """处理好友申请（同意/拒绝）"""
         async with self.lock:
             if uid not in self.users:
