@@ -230,7 +230,7 @@ class FriendBotPlugin(Star):
         pass
 
 @filter.command("friend")
-    async def friend(self, event: AstrMessageEvent):
+async def friend(self, event: AstrMessageEvent):
         '''好友系统命令 /friend add <id> [msg] - 添加好友 /friend accept <id> - 同意好友申请 /friend reject <id> - 拒绝好友申请 /friend remove <id> - 删除好友 /friend list - 查看好友列表和待处理申请 '''
         user_id = event.get_sender_id()
         user_name = event.get_sender_name()
