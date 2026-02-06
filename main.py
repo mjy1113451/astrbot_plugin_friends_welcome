@@ -263,26 +263,26 @@ async def friend(self, event: AstrMessageEvent):
         else:
             yield event.plain_result(f"❌ 未知命令 '{cmd}'，可用: add, accept, reject, remove, list")
 
-    async def _handle_add(self, user_id: str, args: List[str]) -> str:
+async def _handle_add(self, user_id: str, args: List[str]) -> str:
         if len(args) < 2:
             return "用法: /friend add <对方ID> [备注消息]"
         target_id = args[1]
         msg = " ".join(args[2:]) if len(args) > 2 else ""
         return await self.send_request(user_id, target_id, msg)
 
-    async def _handle_accept(self, user_id: str, args: List[str]) -> str:
+async def _handle_accept(self, user_id: str, args: List[str]) -> str:
         if len(args) < 2:
             return "用法: /friend accept <对方ID>"
         target_id = args[1]
         return await self.handle_request(user_id, target_id, Action.ACCEPT)
 
-    async def _handle_reject(self, user_id: str, args: List[str]) -> str:
+async def _handle_reject(self, user_id: str, args: List[str]) -> str:
         if len(args) < 2:
             return "用法: /friend reject <对方ID>"
         target_id = args[1]
         return await self.handle_request(user_id, target_id, Action.REJECT)
 
-    async def _handle_remove(self, user_id: str, args: List[str]) -> str:
+async def _handle_remove(self, user_id: str, args: List[str]) -> str:
         if len(args) < 2:
             return "用法: /friend remove <对方ID>"
         target_id = args[1]
